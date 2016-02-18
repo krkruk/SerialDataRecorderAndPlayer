@@ -1,9 +1,10 @@
 from tkinter import ttk
 from tkinter import *
 
+
 class CommandRunnable:
     def __init__(self):
-        pass
+        self.commands = {}
 
     def exec_command(self, key):
         try: return self.commands[key]()
@@ -36,8 +37,9 @@ class StatusBar(ttk.Frame):
 class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
     def __init__(self, master=None, label: str = ""):
         ttk.Labelframe.__init__(self, master, text=label)
+        self._connect_btn_label = ("Connect", "Disconnect")
         self.commands = {}
-        self.start_button_text = StringVar()
+        self.connect_button_text = StringVar()
         self.serial_select_combo_box = ttk.Combobox(self)
         self.serial_select_combo_box.grid(column=0, row=0, columnspan=2, padx=10, pady=5)
 
@@ -49,8 +51,8 @@ class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
 
     def _init_buttons(self):
         refresh_button = ttk.Button(self, text="Refresh", command=self.serial_refresh)
-        self.start_button_text.set("Start")
-        connect_button = ttk.Button(self, textvariable=self.start_button_text, command=self.serial_start)
+        self.connect_button_text.set("Connect")
+        connect_button = ttk.Button(self, textvariable=self.connect_button_text, command=self.serial_connect)
 
         refresh_button.grid(column=0, row=1, padx=5, pady=5)
         connect_button.grid(column=1, row=1, padx=5, pady=5)
@@ -61,11 +63,60 @@ class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
     def serial_refresh(self):
         self.exec_command("serial_refresh")
 
-    def serial_start(self):
-        if self.exec_command("serial_start"):
-            self.start_button_text.set("Stop")
+    def serial_connect(self):
+        if self.exec_command("serial_connect"):
+            self.connect_button_text.set(self._connect_btn_label[1])
         else:
-            self.start_button_text.set("Start")
+            self.connect_button_text.set(self._connect_btn_label[0])
+
+
+class RecordPlayDataWidget(ttk.Labelframe, CommandRunnable):
+    def __init__(self, master, label: str = ""):
+        ttk.Labelframe.__init__(self, master=master, text=label)
+        self._record_btn_label = ("Record", "Stop recording")
+        self._play_btn_label = ("Play", "Stop playing")
+        self.master = master
+        self.commands = {}
+        self.record_button_text = StringVar()
+        self.play_button_text = StringVar()
+
+        self._init_buttons()
+        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(0, weight=1)
+
+    def _init_buttons(self):
+        self.record_button = ttk.Button(self, textvariable=self.record_button_text, command=self.button_record)
+        self.play_button = ttk.Button(self, textvariable=self.play_button_text, command=self.button_play)
+
+        self.record_button_text.set(self._record_btn_label[0])
+        self.play_button_text.set(self._play_btn_label[0])
+        self.record_button.grid(column=0, row=0, padx=5, pady=5)
+        self.play_button.grid(column=1, row=0, padx=5, pady=5)
+
+    def button_record(self):
+        if self.exec_command("button_record"):
+            self.record_button_text.set(self._record_btn_label[1])
+        else:
+            self.record_button_text.set(self._record_btn_label[0])
+
+    def button_play(self):
+        if self.exec_command("button_play"):
+            self.play_button_text.set(self._play_btn_label[1])
+        else:
+            self.play_button_text.set(self._play_btn_label[0])
+
+    def set_button_record_enable(self, state: bool = True):
+        if state:
+            self.record_button["state"] = NORMAL
+        else:
+            self.record_button["state"] = DISABLED
+
+    def set_button_play_enable(self, state: bool = True):
+        if state:
+            self.play_button["state"] = NORMAL
+        else:
+            self.play_button["state"] = DISABLED
 
 
 class MainWindow(ttk.Frame, CommandRunnable):
@@ -74,11 +125,12 @@ class MainWindow(ttk.Frame, CommandRunnable):
         self.commands = {}
         self.status_bar = StatusBar(master)
         self.serial_widget = SerialSelectWidget(master=self, label="Serial Select")
+        self.record_play_widget = RecordPlayDataWidget(master=self, label="Data interaction")
         self.master = master
         self.master.option_add('*tearOff', False)
 
         self._init_menu_bar()
-        self._init_buttons()
+        self._init_widget_body()
         self.pack(fill=BOTH, padx=5, pady=5)
 
     def _init_menu_bar(self):
@@ -97,8 +149,9 @@ class MainWindow(ttk.Frame, CommandRunnable):
 
         help_menu.add_command(label="About", command=self.menu_about)
 
-    def _init_buttons(self):
+    def _init_widget_body(self):
         self.serial_widget.pack(fill=X)
+        self.record_play_widget.pack(fill=X)
 
     def menu_open(self):
         self.exec_command(key="menu_open")
