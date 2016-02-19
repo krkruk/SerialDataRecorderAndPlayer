@@ -1,13 +1,13 @@
 from tkinter import ttk
 from tkinter import *
-
+import serial_server as ss
 
 class CommandRunnable:
     def __init__(self):
         self.commands = {}
 
-    def exec_command(self, key):
-        try: return self.commands[key]()
+    def exec_command(self, key, *args, **kwargs):
+        try: return self.commands[key](*args, **kwargs)
         except KeyError: print("No key '{}' detected".format(key))
 
 
@@ -37,10 +37,12 @@ class StatusBar(ttk.Frame):
 class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
     def __init__(self, master=None, label: str = ""):
         ttk.Labelframe.__init__(self, master, text=label)
+        CommandRunnable.__init__(self)
         self._connect_btn_label = ("Connect", "Disconnect")
-        self.commands = {}
         self.connect_button_text = StringVar()
-        self.serial_select_combo_box = ttk.Combobox(self)
+        self._serial_select_current_elem = StringVar()
+        self._serial_select_current_elem.set("---Select---")
+        self.serial_select_combo_box = ttk.Combobox(self, textvariable=self._serial_select_current_elem)
         self.serial_select_combo_box.grid(column=0, row=0, columnspan=2, padx=10, pady=5)
 
         self._init_buttons()
@@ -58,13 +60,15 @@ class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
         connect_button.grid(column=1, row=1, padx=5, pady=5)
 
     def set_combo_values(self, values):
+        self._serial_select_current_elem.set("---Select---")
         self.serial_select_combo_box["values"] = tuple(values)
 
     def serial_refresh(self):
-        self.exec_command("serial_refresh")
+        serial_coms = self.exec_command("serial_refresh")
+        self.set_combo_values(serial_coms)
 
     def serial_connect(self):
-        if self.exec_command("serial_connect"):
+        if self.exec_command("serial_connect", port=self._serial_select_current_elem.get()):
             self.connect_button_text.set(self._connect_btn_label[1])
         else:
             self.connect_button_text.set(self._connect_btn_label[0])
@@ -73,10 +77,10 @@ class SerialSelectWidget(ttk.Labelframe, CommandRunnable):
 class RecordPlayDataWidget(ttk.Labelframe, CommandRunnable):
     def __init__(self, master, label: str = ""):
         ttk.Labelframe.__init__(self, master=master, text=label)
+        CommandRunnable.__init__(self)
         self._record_btn_label = ("Record", "Stop recording")
         self._play_btn_label = ("Play", "Stop playing")
         self.master = master
-        self.commands = {}
         self.record_button_text = StringVar()
         self.play_button_text = StringVar()
 
@@ -122,12 +126,13 @@ class RecordPlayDataWidget(ttk.Labelframe, CommandRunnable):
 class MainWindow(ttk.Frame, CommandRunnable):
     def __init__(self, master=None):
         ttk.Frame.__init__(self, master)
-        self.commands = {}
+        CommandRunnable.__init__(self)
         self.status_bar = StatusBar(master)
         self.serial_widget = SerialSelectWidget(master=self, label="Serial Select")
         self.record_play_widget = RecordPlayDataWidget(master=self, label="Data interaction")
         self.master = master
         self.master.option_add('*tearOff', False)
+        self.serial_widget.commands["serial_refresh"] = lambda: (l.device for l in ss.SerialServer.list_ports())
 
         self._init_menu_bar()
         self._init_widget_body()
