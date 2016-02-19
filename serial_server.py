@@ -32,6 +32,7 @@ class SerialServer(mp.Process):
     def __init__(self, port=None, baudrate=9600, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
                  stopbits=serial.STOPBITS_ONE, queue: mp.Queue=None):
         mp.Process.__init__(self)
+        self.daemon = True
         self.recv_queue = queue
         self.send_queue = mp.Queue()
         self.port = port
@@ -39,34 +40,41 @@ class SerialServer(mp.Process):
         self.bytesize = bytesize
         self.parity = parity
         self.stopbits = stopbits
-        self.ser = None
-        self.serv_manager = None
+        self._lock = mp.Lock()
+        try:
+            self.serv = serial.Serial(port=self.port, baudrate=self.baudrate, bytesize=self.bytesize,
+                                      parity=self.parity, stopbits=self.stopbits)
+        except serial.SerialException as e:
+            print(e)
 
     def run(self):
-        self.ser = serial.Serial(port=self.port, baudrate=self.baudrate, bytesize=self.bytesize,
-                                 parity=self.parity, stopbits=self.stopbits)
-
-        with ReaderThread(self.ser, _SerialReadLine) as self.serv_manager:
-            self.serv_manager.add_queue(self.recv_queue)
-            while True:
+        try:
+            while self.is_alive() and self.serv.is_open:
                 try:
-                    send_data = self.send_queue.get()
-                    self.serv_manager.write_line(send_data)
+                    self.recv_queue.put(self.serv.readline().decode("ascii"))
                 except KeyboardInterrupt: break
+                except serial.SerialException as e:
+                    print("Serial {}".format(e))
+                    break
+        except AttributeError:
+            raise RuntimeError("No resource")
 
     @staticmethod
     def list_ports():
         return list_ports.comports()
 
     def send_data(self, line):
-        self.send_queue.put(line)
+        with self._lock:
+            if self.serv:
+                self.serv.write("{}\n".format(line).encode("ascii"))
+
 
 if __name__ == "__main__":
     coms = SerialServer.list_ports()
     q = mp.Queue()
     server = SerialServer(port=coms[0].device, baudrate=115200, queue=q)
     i = 0
-    l = [x for x in range(100001)]
+    # l = [x for x in range(100001)]
     server.start()
     while True:
         try:
@@ -79,6 +87,8 @@ if __name__ == "__main__":
             except Exception as e:
                 print("END {}".format(e))
                 break
-        except KeyboardInterrupt: break
+        except KeyboardInterrupt:
+            print("Interrupt")
+            break
 
     server.join()
